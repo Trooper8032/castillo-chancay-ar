@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0d3550">
+<title>Estación AR – Castillo de Chancay</title>
+<link rel="preload" href="modelos/vikingo.glb" as="fetch" crossorigin>
+<link rel="stylesheet" href="css/estilos.css">
+<style>
+html,body{overflow:hidden;width:100%;height:100%;margin:0;background:#0b1a26}
+html.modo-ar,html.modo-ar body{background:transparent!important}
+html:not(.modo-ar) a-scene,html:not(.modo-ar) .a-canvas{position:fixed!important;inset:0}
+.a-loader-title,.a-enter-vr,.a-enter-ar{display:none!important}
+.cargando{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:14;color:#f3d27a;font-family:'Cinzel',serif;font-size:.85rem;letter-spacing:.2em;text-align:center}
+.cargando i{display:block;width:44px;height:44px;margin:0 auto 10px;border:3px solid rgba(243,210,122,.25);border-top-color:#f3d27a;border-radius:50%;animation:gira 1s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+</style>
+</head><body>
+
+<div class="top">
+  <a href="index.html#mapa" aria-label="Volver al mapa">‹</a>
+  <div class="t" id="tTitulo"><span></span><small id="tSub"></small></div>
+  <span class="chip" id="chipModo">AR</span>
+  <button class="btn-icono" id="btnMudo" aria-label="Sonido">🔊</button>
+</div>
+<div class="aviso-demo oculto" id="avisoDemo">MODO DEMO · SIN CÁMARA</div>
+<div class="guia oculto" id="guia"><span>Apunta la cámara al marcador<br>del punto <b id="gNum"></b></span></div>
+<div class="cargando oculto" id="cargando"><i></i>INVOCANDO AL GUÍA…</div>
+
+<div class="splash" id="splash">
+  <div class="num" id="sNum"></div>
+  <h2 id="sNombre"></h2>
+  <p id="sTema"></p>
+  <button class="btn-juego" id="btnComenzar">⚔ Comenzar</button>
+</div>
+
+<div class="dialogo" id="dialogo">
+  <span class="dlg-nombre">El Vikingo · Tu guía</span>
+  <div class="dlg-caja">
+    <div class="dlg-retrato"><img src="assets/vikingo-retrato.png" alt=""></div>
+    <div class="dlg-texto"></div>
+    <div class="dlg-acciones oculto">
+      <button class="b-voz" id="btnVoz">🔊 Escuchar</button>
+      <button class="b-oro" id="btnSeguir">Ver la historia ⚔</button>
+    </div>
+    <span class="dlg-sig oculto">▼</span>
+  </div>
+</div>
+
+<div class="panel" id="panel"><div class="caja">
+  <div class="tema" id="pTema"></div>
+  <h3 id="pTitulo"></h3>
+  <p id="pHistoria"></p>
+  <p class="dato" id="pDato"></p>
+  <div class="acertijo">
+    <div class="et">🧩 Acertijo · pista del siguiente punto</div>
+    <p id="pAcertijo"></p>
+    <div id="pOpciones"></div>
+    <div class="resultado" id="pRes"></div>
+  </div>
+  <div id="pSalidas" style="margin-top:12px"></div>
+  <button class="btn" style="background:none;color:var(--mar);font-size:.85rem;padding:10px" id="btnSaltar">Continuar sin responder ›</button>
+  <div class="credito" style="padding:4px 0 0">RIVERGREEN SOLUTIONS<br><span style="letter-spacing:0;font-size:.6rem">Casco 3D: “Viking Helmet”, Michael Fuchs (CC-BY 3.0)</span></div>
+</div></div>
+
+<script src="js/datos.js"></script>
+<script>
+const q = new URLSearchParams(location.search);
+const est = ESTACIONES.find(e => e.id === +q.get('p')) || ESTACIONES[0];
+const sig = ESTACIONES.find(e => e.id === est.id + 1);
+const $ = id => document.getElementById(id);
+document.title = `${est.nombre} – Castillo de Chancay AR`;
+$('tTitulo').firstChild.textContent = `Punto ${est.id}: ${est.nombre}`;
+$('tSub').textContent = est.tema; $('gNum').textContent = est.id;
+$('sNum').textContent = `Punto ${est.id} de ${ESTACIONES.length}`; $('sNombre').textContent = est.nombre; $('sTema').textContent = est.tema;
+$('pTema').textContent = `Punto ${est.id} · ${est.tema}`; $('pTitulo').textContent = est.titulo;
+$('pHistoria').textContent = est.historia; $('pDato').textContent = '👀 ' + est.dato;
+$('pAcertijo').textContent = '“' + est.acertijo + '”';
+
+const cargar = src => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = err; document.head.appendChild(s); });
+const AFRAME_URL = 'https://aframe.io/releases/1.4.2/aframe.min.js';
+const EXTRAS_URL = 'https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js';
+const ARJS_URL = 'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js';
+const demo = q.get('demo') === '1' || localStorage.getItem('chancay-ar-demo') === '1' || !window.isSecureContext || !navigator.mediaDevices?.getUserMedia;
+const enPared = q.get('montaje') !== 'mesa';
+let vikingoActivo = null, dlg = null;
+
+/* ---- panel de historia y acertijo ---- */
+const mostrarPanel = () => { $('panel').classList.add('ver'); $('guia').classList.add('oculto'); };
+function terminar(acerto){
+  Progreso.marcar(est.id); $('btnSaltar').classList.add('oculto');
+  const fin = Progreso.completo();
+  $('pRes').textContent = acerto ? (sig ? `¡Correcto! Tu siguiente destino: ${sig.nombre}.` : '¡Correcto! Completaste el último reto.') : 'Punto registrado. ¡Sigue explorando!';
+  $('pSalidas').innerHTML = fin ? `<a class="btn btn-pri" href="index.html#final">🏆 Ver recorrido completado</a>` : `<a class="btn btn-pri" href="index.html#mapa">🗺️ Ver mapa y siguiente punto</a>`;
+  if (acerto && vikingoActivo) vikingoActivo.components.vikingo.saludar();
+}
+$('pOpciones').innerHTML = est.opciones.map((o,i)=>`<button class="opc" data-i="${i}">${String.fromCharCode(65+i)}) ${o}</button>`).join('');
+document.querySelectorAll('.opc').forEach(b => b.onclick = () => {
+  if (+b.dataset.i === est.correcta){ document.querySelectorAll('.opc').forEach(x=>x.disabled=true); b.classList.add('bien'); Sonidos.exito(); terminar(true); }
+  else { b.classList.remove('mal'); void b.offsetWidth; b.classList.add('mal'); Sonidos.error(); $('pRes').textContent = 'Casi… vuelve a leer la pista e inténtalo otra vez.'; }
+});
+$('btnSaltar').onclick = () => terminar(false);
+
+/* ---- contenido 3D: vikingo + efecto de aparición + luces con sombra ---- */
+function contenido3D(sufijo, escala) {
+  return `
+   <a-entity id="ap-${sufijo}" aparicion="objetivo: #vk-${sufijo}; escala: ${escala}; radio: ${escala * 1.3}">
+     <a-entity id="vk-${sufijo}" vikingo rotation="0 ${est.id === 3 ? -12 : 0} 0"></a-entity>
+   </a-entity>
+   <a-entity light="type: directional; intensity: 1.6; color: #ffe2b8; castShadow: true; shadowMapWidth: 1024; shadowMapHeight: 1024;
+      shadowCameraLeft: -${3*escala}; shadowCameraRight: ${3*escala}; shadowCameraTop: ${4*escala}; shadowCameraBottom: -${3*escala}; shadowBias: -0.0005; target: #vk-${sufijo}"
+      position="${-1.2*escala} ${4*escala} ${-1.6*escala}"></a-entity>
+   <a-entity light="type: directional; intensity: 0.9; color: #dfe9ff; target: #vk-${sufijo}" position="${1.5*escala} ${2.2*escala} ${3*escala}"></a-entity>`;
+}
+function invocar(sufijo) {
+  const ap = document.getElementById('ap-' + sufijo), vk = document.getElementById('vk-' + sufijo);
+  if (!ap || vikingoActivo) return;
+  vikingoActivo = vk;
+  const empezar = () => {
+    $('cargando').classList.add('oculto'); $('guia').classList.add('oculto');
+    ap.emit('aparecer');
+    setTimeout(() => vk.components.vikingo.saludar(), 450);
+    setTimeout(() => dlg.mostrar(), 1700);
+  };
+  if (vk.components.vikingo && vk.components.vikingo.listo) empezar();
+  else { $('cargando').classList.remove('oculto'); vk.addEventListener('vikingo-listo', empezar, { once: true }); }
+}
+
+/* ---- MODO DEMO: escena 3D con fondo de playa (sin cámara) ---- */
+async function modoDemo(){
+  $('chipModo').textContent = 'DEMO';
+  $('cargando').classList.remove('oculto');
+  await cargar(AFRAME_URL); await cargar(EXTRAS_URL); await cargar('js/vikingo3d.js');
+  document.body.insertAdjacentHTML('afterbegin', `
+   <a-scene embedded vr-mode-ui="enabled:false" loading-screen="enabled:false" renderer="colorManagement:true; antialias:true; physicallyCorrectLights:false"
+      entorno-juego="exposicion: 0.92" device-orientation-permission-ui="enabled:false" shadow="type: pcfsoft">
+     <a-assets><img id="cielo" src="assets/fondos/playa-amanecer-4k.jpg" crossorigin="anonymous"></a-assets>
+     <a-sky src="#cielo" rotation="0 ${q.get('cielo') || 312} 0" radius="60"></a-sky>
+     <a-entity light="type: hemisphere; color: #ffe2bd; groundColor: #4a3c2c; intensity: 0.65"></a-entity>
+     <!-- pedestal de piedra con runas -->
+     <a-cylinder position="0 -0.12 0" radius="1.35" height="0.24" segments-radial="48" material="color: #5f574d; roughness: 0.9" shadow="receive: true"></a-cylinder>
+     <a-cylinder position="0 -0.33 0" radius="1.55" height="0.2" segments-radial="48" material="color: #463f37; roughness: 1" shadow="receive: true"></a-cylinder>
+     <a-torus position="0 0.005 0" rotation="90 0 0" radius="1.18" radius-tubular="0.022" segments-radial="8" segments-tubular="96"
+       material="color: #ffd36b; emissive: #ffb21a; emissiveIntensity: 1" pulso></a-torus>
+     <a-entity position="0 0 0">${contenido3D('demo', 1)}</a-entity>
+     <a-entity camera look-controls="enabled:false" wasd-controls="enabled:false" position="0 1.75 4.9" rotation="-7 0 0" fov="${q.get('fov') || 52}"></a-entity>
+   </a-scene>`);
+  $('avisoDemo').classList.remove('oculto');
+  const sc = document.querySelector('a-scene');
+  const listo = () => { $('cargando').classList.add('oculto'); window.escenaLista = true; };
+  sc.hasLoaded ? listo() : sc.addEventListener('loaded', listo);
+}
+
+/* ---- MODO AR: AR.js + marcadores ---- */
+async function modoAR(){
+  $('cargando').classList.remove('oculto');
+  try { await cargar(AFRAME_URL); await cargar(EXTRAS_URL); await cargar(ARJS_URL); await cargar('js/vikingo3d.js'); }
+  catch(e){ location.search = `?p=${est.id}&demo=1`; return; }
+  const envolver = c => enPared ? `<a-entity rotation="-90 0 0" position="0 0.12 0.5">${c}</a-entity>` : c;
+  document.body.insertAdjacentHTML('afterbegin', `
+    <a-scene embedded vr-mode-ui="enabled:false" loading-screen="enabled:false" renderer="logarithmicDepthBuffer:true; alpha:true; colorManagement:true; antialias:true"
+      entorno-juego="exposicion: 0.95" shadow="type: pcfsoft" arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.5;${q.get('camprueba') === 'vertical' ? ' sourceWidth: 480; sourceHeight: 640; displayWidth: 480; displayHeight: 640;' : ''}">
+      <a-entity light="type: hemisphere; color: #fff3e0; groundColor: #5a4a3a; intensity: 0.9"></a-entity>
+      ${ESTACIONES.map(e => `<a-marker id="mk${e.id}" type="pattern" url="marcadores/marcador-${e.id}.patt" smooth="true" smoothCount="8">${e.id === est.id ? envolver(contenido3D('m', 0.34)) : ''}</a-marker>`).join('')}
+      <a-marker id="mkHiro" type="pattern" url="marcadores/patt.hiro" smooth="true" smoothCount="8">${envolver(contenido3D('h', 0.34))}</a-marker>
+      <a-entity camera></a-entity>
+    </a-scene>`);
+  document.documentElement.classList.add('modo-ar');
+  $('cargando').classList.add('oculto'); $('guia').classList.remove('oculto');
+  $('mkHiro').addEventListener('markerFound', () => invocar('h'));
+  ESTACIONES.forEach(e => $('mk' + e.id).addEventListener('markerFound', () => {
+    if (e.id === est.id) return invocar('m');
+    if (vikingoActivo) return;
+    $('guia').innerHTML = `<span>Este es el marcador del <b>punto ${e.id}</b><br><a href="estacion.html?p=${e.id}" style="color:#e2b44c;pointer-events:auto">Abrir ${e.nombre} ›</a></span>`;
+  }));
+}
+
+/* ---- arranque: pantalla "Comenzar" (desbloquea sonido y voz) ---- */
+const preparando = demo ? modoDemo() : null;
+$('btnComenzar').onclick = async () => {
+  try { window.__audioCtx = window.__audioCtx || new (window.AudioContext || window.webkitAudioContext)(); window.__audioCtx.resume(); } catch (e) {}
+  window.Sonidos && Sonidos.desbloquear();
+  $('splash').style.transition = 'opacity .5s'; $('splash').style.opacity = 0; setTimeout(() => $('splash').remove(), 500);
+  if (demo) { await preparando; Sonidos.desbloquear(); setTimeout(() => invocar('demo'), 300); }
+  else modoAR();
+};
+$('chipModo').onclick = () => { if (!demo) location.search = `?p=${est.id}&demo=1`; };
+
+/* ---- diálogo, sonido y voz (cuando vikingo3d.js ya cargó) ---- */
+(function esperar(){
+  if (!window.Dialogo) return setTimeout(esperar, 100);
+  const pintarMudo = () => $('btnMudo').textContent = Sonidos.mudo ? '🔇' : '🔊';
+  pintarMudo(); $('btnMudo').onclick = () => { Sonidos.mudo = !Sonidos.mudo; Sonidos.desbloquear(); pintarMudo(); };
+  dlg = new Dialogo($('dialogo'), {
+    paginas: est.dialogo,
+    alHablar: si => vikingoActivo && vikingoActivo.components.vikingo.hablar(si)
+  });
+  $('btnVoz').onclick = () => hablarVikingo(dlg.textoCompleto(), $('btnVoz'), () => vikingoActivo && vikingoActivo.components.vikingo.hablar(false));
+  $('btnVoz').addEventListener('click', () => vikingoActivo && speechSynthesis.speaking && vikingoActivo.components.vikingo.hablar(true));
+  $('btnSeguir').onclick = () => { Sonidos.click(); $('dialogo').classList.remove('ver'); mostrarPanel(); };
+})();
+</script>
+</body></html>

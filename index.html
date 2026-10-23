@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d3550">
+<title>Castillo de Chancay – Recorrido en Realidad Aumentada</title>
+<link rel="stylesheet" href="css/estilos.css">
+</head><body>
+<div class="app">
+
+<!-- ===== INICIO ===== -->
+<section id="v-inicio">
+  <header class="hero hero-juego">
+    <div class="kicker">Huaral · Costa del Pacífico</div>
+    <h1 class="serif">Castillo de Chancay<small>Recorrido en Realidad Aumentada</small></h1>
+    <img class="hero-vikingo" src="assets/vikingo-cuerpo.png" alt="Vikingo guía del recorrido">
+  </header>
+  <div class="contenido">
+    <p style="font-size:1rem;line-height:1.5">Descubre la historia y las leyendas del castillo con tu celular. Busca los <b>4 puntos</b> del recorrido, escanea el código y mira aparecer la historia frente a ti. <b>No necesitas instalar ninguna app.</b></p>
+    <div class="guia-vikingo"><img src="assets/vikingo-retrato.png" alt="" class="vik-retrato">
+      <div class="burbuja izq" style="flex:1;margin-top:6px"><b class="quien">🛡️ Tu guía vikingo</b><span id="saludoTxt"></span><br>
+        <button class="btn-voz" id="btnVozInicio">🔊 Escuchar al vikingo</button></div>
+    </div>
+    <div class="pasos">
+      <div class="paso"><b>📍</b>Encuentra el punto</div>
+      <div class="paso"><b>📷</b>Escanea el código</div>
+      <div class="paso"><b>🧩</b>Resuelve el acertijo</div>
+    </div>
+    <a class="btn btn-pri" href="#mapa" id="btnIniciar">▶ Iniciar recorrido</a>
+    <label class="switch"><span><b>Modo demo sin cámara</b><br><small style="color:#6b7780">Para verlo en laptop o presentación</small></span><input type="checkbox" id="chkDemo"></label>
+  </div>
+  <div class="credito">DESARROLLADO POR <b>RIVERGREEN SOLUTIONS</b><br><span style="letter-spacing:.02em;font-size:.62rem">Personaje: KayKit/Kay Lousberg (CC0) · Casco: <a href="https://poly.pizza/m/apPuLbVJ4N5" style="color:inherit">“Viking Helmet” de Michael Fuchs</a> (CC-BY 3.0) · Fondo: Poly Haven (CC0)</span></div>
+</section>
+
+<!-- ===== MAPA ===== -->
+<section id="v-mapa" class="oculto">
+  <div class="contenido">
+    <a href="#inicio" style="color:var(--mar);text-decoration:none;font-weight:700">← Inicio</a>
+    <div class="tarjeta mapa">
+      <h2 class="serif">Mapa del recorrido <span id="cuenta" style="font-size:.85rem;color:var(--teja)"></span></h2>
+      <div class="barra"><i id="barra" style="width:0"></i></div>
+      <svg id="svgMapa" viewBox="0 0 340 300"></svg>
+      <ul class="lista" id="lista"></ul>
+    </div>
+    <a class="btn btn-mar" id="btnSiguiente" href="#">📷 Ir al siguiente punto</a>
+    <button class="btn btn-sec" style="margin-top:10px" id="btnReiniciar">↺ Reiniciar recorrido</button>
+  </div>
+  <div class="credito">DESARROLLADO POR <b>RIVERGREEN SOLUTIONS</b></div>
+</section>
+
+<!-- ===== FINAL ===== -->
+<section id="v-final" class="oculto">
+  <div class="hero" style="padding-bottom:30px">
+    <div class="kicker">¡Felicitaciones, visitante!</div>
+    <div class="medalla-final">🏰</div>
+    <h1 class="serif">¡Recorrido completado!<small>Conquistaste los 4 puntos del Castillo de Chancay</small></h1>
+  </div>
+  <div class="contenido">
+    <div class="tarjeta"><h2 class="serif">Tu recorrido</h2><ul class="lista" id="listaFinal"></ul></div>
+    <p style="text-align:center;font-size:.92rem;margin-bottom:14px">Muestra esta pantalla en la salida y comparte tu experiencia. ¡Gracias por tu visita!</p>
+    <a class="btn btn-sec" href="#mapa">Ver mapa</a>
+    <button class="btn btn-pri" style="margin-top:10px" onclick="Progreso.reiniciar();location.hash='#inicio'">Hacer el recorrido otra vez</button>
+  </div>
+  <div class="credito">DESARROLLADO POR <b>RIVERGREEN SOLUTIONS</b></div>
+</section>
+</div>
+
+<script src="js/datos.js"></script>
+<script src="js/vikingo.js"></script>
+<script>document.getElementById('saludoTxt').textContent=SALUDO_VIKINGO;document.getElementById('btnVozInicio').onclick=e=>hablarVikingo(SALUDO_VIKINGO,e.currentTarget);</script>
+<script>
+const P = [{x:85,y:80},{x:180,y:120},{x:95,y:165},{x:245,y:180}]; // posición de los puntos en el plano
+const chk = document.getElementById('chkDemo');
+chk.checked = localStorage.getItem('chancay-ar-demo') === '1';
+chk.onchange = () => localStorage.setItem('chancay-ar-demo', chk.checked ? '1' : '0');
+const urlEst = id => `estacion.html?p=${id}` + (chk.checked ? '&demo=1' : '');
+
+function dibujarMapa(){
+  const hechos = Progreso.leer();
+  const n = hechos.length, tot = ESTACIONES.length;
+  document.getElementById('cuenta').textContent = `${n} de ${tot}`;
+  document.getElementById('barra').style.width = (n/tot*100)+'%';
+  let s = `
+   <defs><pattern id="ola" width="24" height="10" patternUnits="userSpaceOnUse"><path d="M0 5 q6 -5 12 0 t12 0" stroke="#7fb6c4" fill="none" stroke-width="1.5"/></pattern></defs>
+   <rect x="0" y="0" width="340" height="300" rx="16" fill="#efe4cc"/>
+   <path d="M0 230 Q90 215 170 238 T340 225 V300 H0z" fill="#1d6f86"/><path d="M0 245 Q90 232 170 252 T340 242 V300 H0z" fill="url(#ola)"/>
+   <text x="170" y="282" text-anchor="middle" font-size="11" fill="#e8f3f5" letter-spacing="3">OCÉANO PACÍFICO</text>
+   <path d="M40 40 h250 v170 h-250z" fill="#e3d1a8" stroke="#b89a6a" stroke-width="3" rx="8"/>
+   <rect x="30" y="30" width="26" height="26" fill="#b89a6a"/><rect x="274" y="30" width="26" height="26" fill="#b89a6a"/>
+   <rect x="30" y="194" width="26" height="26" fill="#b89a6a"/><rect x="274" y="194" width="26" height="26" fill="#b89a6a"/>
+   <path d="M${P.map(p=>p.x+' '+p.y).join(' L')}" fill="none" stroke="#8a6d52" stroke-width="3" stroke-dasharray="6 6"/>`;
+  ESTACIONES.forEach((e,i)=>{
+    const ok = hechos.includes(e.id), p = P[i];
+    const actual = !ok && ESTACIONES.slice(0,i).every(x=>hechos.includes(x.id));
+    s += `<a href="${urlEst(e.id)}">
+      ${actual?`<circle cx="${p.x}" cy="${p.y}" r="22" fill="none" stroke="#b5543a" stroke-width="3"><animate attributeName="r" values="18;26;18" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;.2;1" dur="1.6s" repeatCount="indefinite"/></circle>`:''}
+      <circle cx="${p.x}" cy="${p.y}" r="17" fill="${ok?'#2f9e6e':(actual?'#b5543a':'#0d3550')}" stroke="#fff" stroke-width="3"/>
+      <text x="${p.x}" y="${p.y+5}" text-anchor="middle" font-size="${ok?15:14}" font-weight="800" fill="#fff">${ok?'✓':e.id}</text>
+      <text x="${p.x}" y="${p.y+33}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0d3550">${e.nombre}</text></a>`;
+  });
+  document.getElementById('svgMapa').innerHTML = s;
+  const li = e => `<li class="${Progreso.hecho(e.id)?'hecho':''}"><a href="${urlEst(e.id)}"><span class="num">${Progreso.hecho(e.id)?'✓':e.id}</span><span><b>${e.icono} ${e.nombre}</b><small>${e.tema}</small></span><span class="flecha">${Progreso.hecho(e.id)?'Repetir':'Abrir AR ›'}</span></a></li>`;
+  document.getElementById('lista').innerHTML = ESTACIONES.map(li).join('');
+  document.getElementById('listaFinal').innerHTML = ESTACIONES.map(li).join('');
+  const sig = ESTACIONES.find(e=>!Progreso.hecho(e.id));
+  const b = document.getElementById('btnSiguiente');
+  if (sig){ b.href = urlEst(sig.id); b.textContent = `📷 Ir al punto ${sig.id}: ${sig.nombre}`; }
+  else { b.href = '#final'; b.textContent = '🏆 Ver recorrido completado'; }
+}
+document.getElementById('btnReiniciar').onclick = () => { if (confirm('¿Borrar tu progreso?')) { Progreso.reiniciar(); dibujarMapa(); } };
+function ruta(){
+  const h = (location.hash||'#inicio').slice(1);
+  ['inicio','mapa','final'].forEach(v=>document.getElementById('v-'+v).classList.toggle('oculto', v!==h));
+  if (h!=='inicio') dibujarMapa();
+  window.scrollTo(0,0);
+}
+addEventListener('hashchange', ruta);
+// ?demo=1 activa el modo demo; ?semilla=1,2 precarga progreso (útil para presentaciones)
+const q = new URLSearchParams(location.search);
+if (q.get('demo')==='1'){ chk.checked=true; chk.onchange(); }
+if (q.get('semilla')) q.get('semilla').split(',').map(Number).forEach(id=>Progreso.marcar(id));
+ruta();
+</script>
+</body></html>
